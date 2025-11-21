@@ -19,9 +19,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # Virtual Environment
+venv/
 my_env/
 
 # IDE
@@ -31,16 +31,10 @@ my_env/
 *.swo
 
 # Data
-data/raw/
-data/processed/
+data/
 *.csv
-*.json
 *.parquet
+*.pkl
 
 # Logs
 *.log
-logs/
-
-# OS
-.DS_Store
-Thumbs.db
