@@ -1,56 +1,55 @@
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict, Any
+from typing import Tuple, Optional
 import logging
 
-logger = logging.getLogger(__name__)
-
 class DataLoader:
-    """
-    Data loader class for financial news and stock data
-    """
+    """Data loader class for handling financial news data"""
     
-    def __init__(self):
+    def __init__(self, file_path: str):
+        self.file_path = file_path
         self.data = None
-        self.stock_data = None
-        
-    def load_news_data(self, file_path: str) -> pd.DataFrame:
-        """
-        Load news data from CSV file
-        """
+        self.logger = logging.getLogger(__name__)
+    
+    def load_data(self) -> pd.DataFrame:
+        """Load data from CSV file"""
         try:
-            self.news_data = pd.read_csv(file_path)
-            logger.info(f"Successfully loaded news data with {len(self.news_data)} rows")
-            return self.news_data
+            self.data = pd.read_csv(self.file_path)
+            self.logger.info(f"Data loaded successfully with {len(self.data)} rows")
+            return self.data
         except Exception as e:
-            logger.error(f"Error loading news data: {e}")
-            raise
-            
-    def load_stock_data(self, file_path: str) -> pd.DataFrame:
-        """
-        Load stock data from CSV file
-        """
-        try:
-            self.stock_data = pd.read_csv(file_path, parse_dates=['Date'])
-            self.stock_data.set_index('Date', inplace=True)
-            logger.info(f"Successfully loaded stock data with {len(self.stock_data)} rows")
-            return self.stock_data
-        except Exception as e:
-            logger.error(f"Error loading stock data: {e}")
+            self.logger.error(f"Error loading data: {e}")
             raise
     
-    def get_basic_info(self) -> Dict[str, Any]:
-        """
-        Get basic information about loaded datasets
-        """
-        info = {}
-        if hasattr(self, 'news_data') and self.news_data is not None:
-            info['news_data_shape'] = self.news_data.shape
-            info['news_data_columns'] = self.news_data.columns.tolist()
-            info['news_data_info'] = self.news_data.info()
-            
-        if self.stock_data is not None:
-            info['stock_data_shape'] = self.stock_data.shape
-            info['stock_data_columns'] = self.stock_data.columns.tolist()
-            
-        return info
+    def clean_data(self) -> pd.DataFrame:
+        """Clean and preprocess the data"""
+        if self.data is None:
+            raise ValueError("No data loaded. Call load_data() first.")
+        
+        # Remove duplicates
+        self.data = self.data.drop_duplicates()
+        
+        # Handle missing values
+        self.data = self.data.dropna(subset=['headline', 'publisher', 'publication_date'])
+        
+        # Convert publication date to datetime
+        self.data['publication_date'] = pd.to_datetime(self.data['publication_date'])
+        
+        # Extract date components for time series analysis
+        self.data['publication_day'] = self.data['publication_date'].dt.day_name()
+        self.data['publication_hour'] = self.data['publication_date'].dt.hour
+        self.data['publication_week'] = self.data['publication_date'].dt.isocalendar().week
+        
+        return self.data
+    
+    def get_basic_info(self) -> dict:
+        """Get basic information about the dataset"""
+        return {
+            'shape': self.data.shape,
+            'columns': list(self.data.columns),
+            'date_range': {
+                'start': self.data['publication_date'].min(),
+                'end': self.data['publication_date'].max()
+            },
+            'publishers_count': self.data['publisher'].nunique()
+        }
