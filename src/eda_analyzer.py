@@ -2,149 +2,104 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime
-import logging
 from typing import Dict, List, Tuple
-import warnings
-warnings.filterwarnings('ignore')
-
-logger = logging.getLogger(__name__)
+import logging
+from datetime import datetime
 
 class EDAAnalyzer:
-    """
-    Exploratory Data Analysis for financial news data
-    """
+    """Exploratory Data Analysis for financial news data"""
     
     def __init__(self, data: pd.DataFrame):
         self.data = data
-        self.setup_plot_style()
-        
-    def setup_plot_style(self):
-        """Setup consistent plotting style"""
+        self.logger = logging.getLogger(__name__)
+        self.setup_plotting()
+    
+    def setup_plotting(self):
+        """Setup plotting style"""
         plt.style.use('seaborn-v0_8')
-        self.colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B1F2B']
-        
-    def descriptive_statistics(self) -> Dict:
-        """
-        Perform descriptive statistics analysis
-        """
+        self.figsize = (12, 8)
+    
+    def calculate_descriptive_stats(self) -> Dict:
+        """Calculate descriptive statistics for textual lengths"""
         stats = {}
         
-        # Text length statistics
-        if 'headline' in self.data.columns:
-            self.data['headline_length'] = self.data['headline'].str.len()
-            stats['headline_length'] = {
-                'mean': self.data['headline_length'].mean(),
-                'std': self.data['headline_length'].std(),
-                'min': self.data['headline_length'].min(),
-                'max': self.data['headline_length'].max()
-            }
-            
+        # Headline length statistics
+        self.data['headline_length'] = self.data['headline'].str.len()
+        stats['headline_length'] = {
+            'mean': self.data['headline_length'].mean(),
+            'median': self.data['headline_length'].median(),
+            'std': self.data['headline_length'].std(),
+            'min': self.data['headline_length'].min(),
+            'max': self.data['headline_length'].max()
+        }
+        
         # Articles per publisher
-        if 'publisher' in self.data.columns:
-            publisher_counts = self.data['publisher'].value_counts()
-            stats['publisher_counts'] = publisher_counts.to_dict()
-            stats['top_publishers'] = publisher_counts.head(10).to_dict()
-            
+        publisher_counts = self.data['publisher'].value_counts()
+        stats['publisher_distribution'] = {
+            'top_10_publishers': publisher_counts.head(10).to_dict(),
+            'total_publishers': len(publisher_counts),
+            'articles_per_publisher_avg': publisher_counts.mean()
+        }
+        
         return stats
     
-    def analyze_publication_dates(self, date_column: str = 'date') -> Dict:
-        """
-        Analyze publication date trends
-        """
-        if date_column not in self.data.columns:
-            logger.warning(f"Date column '{date_column}' not found")
-            return {}
-            
-        self.data[date_column] = pd.to_datetime(self.data[date_column])
+    def analyze_publication_trends(self) -> Dict:
+        """Analyze publication trends over time"""
+        trends = {}
         
-        # Extract time components
-        self.data['publication_year'] = self.data[date_column].dt.year
-        self.data['publication_month'] = self.data[date_column].dt.month
-        self.data['publication_day'] = self.data[date_column].dt.day
-        self.data['publication_dayofweek'] = self.data[date_column].dt.dayofweek
-        self.data['publication_hour'] = self.data[date_column].dt.hour
-        
-        trends = {
-            'articles_per_year': self.data['publication_year'].value_counts().sort_index(),
-            'articles_per_month': self.data['publication_month'].value_counts().sort_index(),
-            'articles_per_dayofweek': self.data['publication_dayofweek'].value_counts().sort_index(),
-            'articles_per_hour': self.data['publication_hour'].value_counts().sort_index()
+        # Daily trends
+        daily_counts = self.data.groupby(self.data['publication_date'].dt.date).size()
+        trends['daily_stats'] = {
+            'mean_articles_per_day': daily_counts.mean(),
+            'max_articles_day': daily_counts.idxmax(),
+            'max_articles_count': daily_counts.max()
         }
+        
+        # Day of week analysis
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        day_counts = self.data['publication_day'].value_counts()
+        day_counts = day_counts.reindex(day_order, fill_value=0)
+        trends['day_of_week'] = day_counts.to_dict()
+        
+        # Hourly analysis
+        hour_counts = self.data['publication_hour'].value_counts().sort_index()
+        trends['hourly_distribution'] = hour_counts.to_dict()
         
         return trends
     
-    def create_time_series_plot(self, date_column: str = 'date'):
-        """
-        Create time series visualization of publication frequency
-        """
-        if date_column not in self.data.columns:
-            return
-            
-        plt.figure(figsize=(15, 8))
+    def create_publication_trend_plots(self, save_path: str = None):
+        """Create visualization for publication trends"""
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
-        # Resample by day
-        daily_counts = self.data.set_index(date_column).resample('D').size()
+        # Plot 1: Articles per day of week
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        day_counts = self.data['publication_day'].value_counts()
+        day_counts = day_counts.reindex(day_order, fill_value=0)
+        axes[0, 0].bar(day_counts.index, day_counts.values)
+        axes[0, 0].set_title('Articles Published by Day of Week')
+        axes[0, 0].tick_params(axis='x', rotation=45)
         
-        plt.subplot(2, 2, 1)
-        daily_counts.plot(title='Daily Publication Frequency', color=self.colors[0])
-        plt.ylabel('Number of Articles')
-        plt.xticks(rotation=45)
-        
-        plt.subplot(2, 2, 2)
-        weekly_counts = self.data.set_index(date_column).resample('W').size()
-        weekly_counts.plot(title='Weekly Publication Frequency', color=self.colors[1])
-        plt.ylabel('Number of Articles')
-        plt.xticks(rotation=45)
-        
-        plt.subplot(2, 2, 3)
-        month_counts = self.data.set_index(date_column).resample('M').size()
-        month_counts.plot(title='Monthly Publication Frequency', color=self.colors[2])
-        plt.ylabel('Number of Articles')
-        plt.xticks(rotation=45)
-        
-        plt.subplot(2, 2, 4)
+        # Plot 2: Articles per hour
         hour_counts = self.data['publication_hour'].value_counts().sort_index()
-        hour_counts.plot(kind='bar', title='Publication Frequency by Hour', color=self.colors[3])
-        plt.xlabel('Hour of Day')
-        plt.ylabel('Number of Articles')
+        axes[0, 1].plot(hour_counts.index, hour_counts.values, marker='o')
+        axes[0, 1].set_title('Articles Published by Hour of Day')
+        axes[0, 1].set_xlabel('Hour of Day')
+        axes[0, 1].set_ylabel('Number of Articles')
+        
+        # Plot 3: Top publishers
+        top_publishers = self.data['publisher'].value_counts().head(10)
+        axes[1, 0].barh(top_publishers.index, top_publishers.values)
+        axes[1, 0].set_title('Top 10 Publishers by Article Count')
+        
+        # Plot 4: Headline length distribution
+        axes[1, 1].hist(self.data['headline_length'], bins=30, alpha=0.7)
+        axes[1, 1].set_title('Headline Length Distribution')
+        axes[1, 1].set_xlabel('Headline Length (characters)')
+        axes[1, 1].set_ylabel('Frequency')
         
         plt.tight_layout()
-        plt.savefig('publication_time_series.png', dpi=300, bbox_inches='tight')
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.show()
-    
-    def publisher_analysis(self) -> Dict:
-        """
-        Analyze publisher patterns and domains
-        """
-        analysis = {}
         
-        if 'publisher' not in self.data.columns:
-            return analysis
-            
-        # Top publishers
-        top_publishers = self.data['publisher'].value_counts().head(15)
-        analysis['top_publishers'] = top_publishers
-        
-        # Domain analysis (if publisher contains email-like patterns)
-        email_mask = self.data['publisher'].str.contains('@', na=False)
-        if email_mask.any():
-            domains = self.data.loc[email_mask, 'publisher'].str.split('@').str[1]
-            analysis['top_domains'] = domains.value_counts().head(10)
-        
-        return analysis
-    
-    def generate_eda_report(self) -> Dict:
-        """
-        Generate comprehensive EDA report
-        """
-        report = {
-            'descriptive_stats': self.descriptive_statistics(),
-            'time_trends': self.analyze_publication_dates(),
-            'publisher_analysis': self.publisher_analysis(),
-            'data_shape': self.data.shape,
-            'data_columns': self.data.columns.tolist(),
-            'missing_values': self.data.isnull().sum().to_dict()
-        }
-        
-        return report
+        return fig
